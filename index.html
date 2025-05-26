@@ -89,6 +89,13 @@
     color: #94a3b8;
     user-select: none;
   }
+  #debugStatus {
+    margin-top: 20px;
+    text-align: center;
+    font-weight: 600;
+    font-size: 1.1rem;
+    color: yellow; /* Per renderlo ben visibile */
+  }
 </style>
 </head>
 <body>
@@ -119,7 +126,7 @@
     <canvas id="etfChart"></canvas>
   </div>
   <div id="currentDateTime"></div>
-</div>
+  <div id="debugStatus">Stato: Inizializzazione...</div> </div>
 
 <script>
   // --- Configurazione Iniziale ---
@@ -159,66 +166,45 @@
     const savedValue = localStorage.getItem('etfValue');
     const savedSimulatedDayCounter = localStorage.getItem('simulatedDayCounter');
     const savedLastRecordedTime = localStorage.getItem('lastRecordedTime');
-
-    console.log("--- DEBUG: Inizio loadState ---");
-    console.log("DEBUG: savedValue (raw):", savedValue);
-    console.log("DEBUG: savedSimulatedDayCounter (raw):", savedSimulatedDayCounter);
-    console.log("DEBUG: savedLastRecordedTime (raw):", savedLastRecordedTime);
+    const debugStatusElement = document.getElementById('debugStatus');
 
     if (savedValue && savedSimulatedDayCounter && savedLastRecordedTime) {
       currentValue = parseFloat(savedValue);
       simulatedDayCounter = parseFloat(savedSimulatedDayCounter);
       lastRecordedTime = parseInt(savedLastRecordedTime); // This is the previous timestamp
 
-      console.log("DEBUG: Dati salvati trovati.");
-      console.log("DEBUG: currentValue (parsed):", currentValue);
-      console.log("DEBUG: simulatedDayCounter (parsed):", simulatedDayCounter);
-      console.log("DEBUG: lastRecordedTime (parsed from saved):", lastRecordedTime);
-
       const currentTime = Date.now(); // Current timestamp
       const timeElapsedMs = currentTime - lastRecordedTime;
       const timeElapsedSeconds = timeElapsedMs / 1000;
 
-      console.log("DEBUG: Current Time (ms):", currentTime);
-      console.log("DEBUG: Time Elapsed (ms):", timeElapsedMs);
-      console.log("DEBUG: Time Elapsed (seconds):", timeElapsedSeconds);
-
       if (timeElapsedSeconds > 0) {
-        console.log("DEBUG: Tempo offline rilevato (>0s). Applico crescita.");
         const growthFactorOffline = Math.pow(1 + targetPerSecondRate, timeElapsedSeconds);
         currentValue *= growthFactorOffline;
         simulatedDayCounter += timeElapsedSeconds / secondsInADay;
-        console.log("DEBUG: Nuovo currentValue (dopo offline):", currentValue);
-        console.log("DEBUG: Nuovo simulatedDayCounter (dopo offline):", simulatedDayCounter);
+        debugStatusElement.textContent = `Stato: Recuperato offline. Tempo passato: ${Math.floor(timeElapsedSeconds / 60)} min ${Math.floor(timeElapsedSeconds % 60)} sec.`;
+        debugStatusElement.style.color = '#22c55e'; // Verde per successo
       } else {
-        console.log("DEBUG: Nessun tempo offline significativo o tempo trascorso <= 0s.");
+        debugStatusElement.textContent = `Stato: Caricato senza tempo offline significativo.`;
+        debugStatusElement.style.color = '#94a3b8'; // Grigio/neutro
       }
       
       dataPoints = [{ x: new Date(currentTime), y: currentValue }];
 
     } else {
       // Primo avvio o dati persi
-      console.log("DEBUG: Nessun dato salvato trovato. Inizializzo un nuovo stato.");
       currentValue = initialCapital;
       simulatedDayCounter = 0;
       dataPoints = [{ x: new Date(), y: currentValue }];
       lastRecordedTime = Date.now(); // Initialize lastRecordedTime for the first run
-      console.log("DEBUG: currentValue (inizializzato):", currentValue);
-      console.log("DEBUG: simulatedDayCounter (inizializzato):", simulatedDayCounter);
-      console.log("DEBUG: lastRecordedTime (inizializzato):", lastRecordedTime);
+      debugStatusElement.textContent = `Stato: Inizializzato da zero (nessun dato salvato).`;
+      debugStatusElement.style.color = '#ef4444'; // Rosso per reset
     }
-    console.log("--- DEBUG: Fine loadState ---");
   }
 
   function saveState() {
     localStorage.setItem('etfValue', currentValue.toFixed(6));
     localStorage.setItem('simulatedDayCounter', simulatedDayCounter.toFixed(6)); // Save with decimals for precision
     localStorage.setItem('lastRecordedTime', Date.now()); // Salva il timestamp corrente
-    console.log("DEBUG: Dati salvati in localStorage:", {
-        etfValue: currentValue.toFixed(6),
-        simulatedDayCounter: simulatedDayCounter.toFixed(6),
-        lastRecordedTime: Date.now()
-    });
   }
 
   // --- Configurazione e Inizializzazione del Grafico ---
