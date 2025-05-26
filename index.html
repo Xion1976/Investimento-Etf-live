@@ -1,175 +1,27 @@
-<script>
-  // ... (tutta la parte CONFIGURAZIONE e UTILITY come prima) ...
-
-  // --- Gestione Persistenza (Caricamento e Salvataggio) ---
-  function loadState() {
-    const savedValue = localStorage.getItem('etfValue');
-    const savedSimulatedDayCounter = localStorage.getItem('simulatedDayCounter');
-    const savedLastRecordedTime = localStorage.getItem('lastRecordedTime');
-    const debugStatusElement = document.getElementById('debugStatus');
-
-    if (savedValue && savedSimulatedDayCounter && savedLastRecordedTime) {
-      currentValue = parseFloat(savedValue);
-      simulatedDayCounter = parseFloat(savedSimulatedDayCounter);
-      lastRecordedTime = parseInt(savedLastRecordedTime); // This is the previous timestamp
-
-      const currentTime = Date.now(); // Current timestamp
-      const timeElapsedMs = currentTime - lastRecordedTime;
-      const timeElapsedSeconds = timeElapsedMs / 1000;
-
-      if (timeElapsedSeconds > 0) {
-        const growthFactorOffline = Math.pow(1 + targetPerSecondRate, timeElapsedSeconds);
-        currentValue *= growthFactorOffline;
-        simulatedDayCounter += timeElapsedSeconds / secondsInADay;
-        debugStatusElement.textContent = `Stato: Recuperato offline. Tempo passato: ${Math.floor(timeElapsedSeconds / 60)} min ${Math.floor(timeElapsedSeconds % 60)} sec.`;
-        debugStatusElement.style.color = '#22c55e'; // Verde per successo
-      } else {
-        debugStatusElement.textContent = `Stato: Caricato senza tempo offline significativo.`;
-        debugStatusElement.style.color = '#94a3b8'; // Grigio/neutro
-      }
-      
-      // Assicurati che dataPoints rifletta il nuovo currentValue subito
-      dataPoints = [{ x: new Date(currentTime), y: currentValue }]; 
-
-    } else {
-      // Primo avvio o dati persi
-      currentValue = initialCapital;
-      simulatedDayCounter = 0;
-      dataPoints = [{ x: new Date(), y: currentValue }];
-      lastRecordedTime = Date.now(); // Initialize lastRecordedTime for the first run
-      debugStatusElement.textContent = `Stato: Inizializzato da zero (nessun dato salvato).`;
-      debugStatusElement.style.color = '#ef4444'; // Rosso per reset
-    }
-  }
-
-  function saveState() {
-    localStorage.setItem('etfValue', currentValue.toFixed(6));
-    localStorage.setItem('simulatedDayCounter', simulatedDayCounter.toFixed(6)); // Save with decimals for precision
-    localStorage.setItem('lastRecordedTime', Date.now()); // Salva il timestamp corrente
-  }
-
-  // --- (tutta la parte CONFIGURAZIONE E INIZIALIZZAZIONE GRAFICO come prima) ---
-  let etfChart; 
-  function initChart() { /* ... */ }
-
-
-  // --- Logica di Aggiornamento Dati (Live) ---
-  function updateInvestment() {
-    let lastPoint = dataPoints[dataPoints.length - 1];
-    let newDate = new Date(); // Usa la data/ora attuale per il nuovo punto
-
-    // Calcola il guadagno/perdita del secondo corrente con rumore
-    const fluctuation = (Math.random() * 2 - 1) * noiseFactor;
-    let actualPerSecondRate = targetPerSecondRate + fluctuation;
-    if (actualPerSecondRate < -0.00002) actualPerSecondRate = -0.00002;
-
-    let prevValue = currentValue;
-    currentValue = currentValue * (1 + actualPerSecondRate);
-    if (currentValue < 0.01) currentValue = 0.01; 
-
-    // Aggiungi nuovo punto al grafico
-    dataPoints.push({ x: newDate, y: currentValue });
-
-    // Mantieni circa 5 minuti di dati (300 punti * 1s = 300s) per l'andamento live
-    const maxPoints = 300; 
-    if(dataPoints.length > maxPoints) {
-        dataPoints.shift();
-    }
-
-    // Aggiorna il grafico
-    etfChart.data.datasets[0].data = dataPoints;
-    etfChart.update('none');
-
-    // --- Aggiorna i Valori Visualizzati nella Dashboard ---
-    // Queste funzioni sono state spostate in una funzione separata per essere chiamate anche da onload
-    updateDashboardDisplay(); 
-
-    // --- Aggiorna Contatore Giornaliero Simulato (per l'obiettivo) ---
-    // Incrementa di un secondo reale / secondi_in_un_giorno per ogni secondo di simulazione live
-    simulatedDayCounter += (1 / secondsInADay); 
-
-    // Anche updateGoalStatusDisplay è una nuova funzione
-    updateGoalStatusDisplay();
-
-    saveState(); // Salva lo stato ogni secondo
-  }
-
-  // NUOVA FUNZIONE: Aggiorna solo i valori della dashboard
-  function updateDashboardDisplay() {
-    const prevValue = parseFloat(document.getElementById('currentValue').textContent.replace('€', '').replace('.', '').replace(',', '.')); // Prende il valore *visualizzato* prima
-    
-    document.getElementById('currentValue').textContent = '€' + currentValue.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-
-    // Calcola la variazione solo se prevValue è valido (non alla prima esecuzione o reset)
-    if (!isNaN(prevValue) && prevValue > 0) { // Assicurati che prevValue sia un numero valido
-        const secondChangePercent = ((currentValue - prevValue) / prevValue) * 100;
-        const secondChangeAmount = currentValue - prevValue;
-
-        const percentElement = document.getElementById('secondChangePercent');
-        const amountElement = document.getElementById('secondChangeAmount');
-
-        percentElement.textContent = `${secondChangePercent.toFixed(4)}%`;
-        amountElement.textContent = `${secondChangeAmount >= 0 ? '+' : ''}€${secondChangeAmount.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, '.')}`;
-
-        if (secondChangePercent > 0) {
-            percentElement.className = 'value-change positive';
-            amountElement.className = 'value-change positive';
-        } else if (secondChangePercent < 0) {
-            percentElement.className = 'value-change negative';
-            amountElement.className = 'value-change negative';
-        } else {
-            percentElement.className = 'value-change neutral';
-            amountElement.className = 'value-change neutral';
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Semplice</title>
+    <style>
+        body {
+            background-color: #282c34; /* Un colore scuro per distinguere */
+            color: white;
+            font-family: sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
         }
-    } else {
-        // Se non abbiamo un prevValue valido (es. al primo caricamento), resetta i campi
-        document.getElementById('secondChangePercent').textContent = '0.0000%';
-        document.getElementById('secondChangeAmount').textContent = '€0.00';
-        document.getElementById('secondChangePercent').className = 'value-change neutral';
-        document.getElementById('secondChangeAmount').className = 'value-change neutral';
-    }
-  }
-
-  // NUOVA FUNZIONE: Aggiorna solo lo stato dell'obiettivo
-  function updateGoalStatusDisplay() {
-    if (simulatedDayCounter >= simulationDays && currentValue < targetValue) {
-        document.getElementById('goalStatus').textContent = 'Obiettivo non raggiunto in tempo!';
-        document.getElementById('goalStatus').style.color = '#ef4444';
-        clearInterval(investmentInterval); // Se l'obiettivo non è raggiunto in tempo, ferma la simulazione
-    } else if (currentValue >= targetValue) {
-        document.getElementById('goalStatus').textContent = 'Obiettivo Raggiunto!';
-        document.getElementById('goalStatus').style.color = '#22c55e';
-        clearInterval(investmentInterval); // Se l'obiettivo è raggiunto, ferma la simulazione
-    } else {
-        // Mostra la parte intera del giorno simulato
-        document.getElementById('goalStatus').textContent = `Monitoraggio (Giorno Sim. ${Math.floor(simulatedDayCounter)}/${simulationDays})`;
-        document.getElementById('goalStatus').style.color = '#f8fafc';
-    }
-  }
-
-
-  let investmentInterval;
-
-  // --- Avvio della Simulazione ---
-  window.onload = () => {
-    loadState();   // Carica i dati salvati (e calcola la crescita offline)
-    initChart();   // Inizializza il grafico con i dati aggiornati
-    updateDateTimeDisplay(); // Mostra l'ora attuale
-    setInterval(updateDateTimeDisplay, 1000); // Aggiorna orario ogni secondo
-
-    // Aggiorna subito la dashboard con i valori iniziali/recuperati da loadState
-    updateDashboardDisplay(); 
-    updateGoalStatusDisplay(); // Aggiorna anche lo stato obiettivo subito
-    
-    // Avvia il timer di aggiornamento solo se la simulazione non è già terminata
-    // Il clearInterval è ora dentro updateGoalStatusDisplay
-    if (currentValue < targetValue && simulatedDayCounter < simulationDays) {
-        investmentInterval = setInterval(updateInvestment, 1000);
-    }
-  };
-
-  // Assicurati di salvare lo stato anche quando la pagina sta per essere chiusa
-  window.addEventListener('beforeunload', saveState);
-  window.addEventListener('pagehide', saveState); // Per browser mobili e cache
-
-</script>
+        h1 {
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <h1>Ciao! Questa è una pagina di test.</h1>
+    <p>Se vedi questo, GitHub Pages funziona.</p>
+</body>
+</html>
