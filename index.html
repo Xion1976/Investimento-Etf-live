@@ -1,27 +1,426 @@
 <!DOCTYPE html>
 <html lang="it">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Test Semplice</title>
-    <style>
-        body {
-            background-color: #282c34; /* Un colore scuro per distinguere */
-            color: white;
-            font-family: sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            margin: 0;
-        }
-        h1 {
-            text-align: center;
-        }
-    </style>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Investimento ETF Live Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap');
+  body {
+    margin: 0; padding: 20px; background: #0f172a; color: #f8fafc;
+    font-family: 'Poppins', sans-serif;
+    display: flex; justify-content: center; align-items: center; min-height: 100vh;
+  }
+  .container {
+    background: #1e293b;
+    border-radius: 20px;
+    box-shadow: 0 0 30px rgba(56,189,248,0.3);
+    max-width: 1000px;
+    width: 100%;
+    padding: 30px;
+    box-sizing: border-box;
+  }
+  h1 {
+    text-align: center;
+    color: #38bdf8;
+    font-weight: 700;
+    margin-bottom: 25px;
+    font-size: 2.5rem;
+    letter-spacing: 1px;
+  }
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 20px;
+    margin-bottom: 30px;
+  }
+  .stat-card {
+    background: #0f172a;
+    padding: 20px 25px;
+    border-radius: 15px;
+    box-shadow: inset 0 0 15px rgba(56,189,248,0.1);
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+  .stat-card h2 {
+    font-weight: 600;
+    font-size: 1.1rem;
+    color: #94a3b8;
+    margin-bottom: 8px;
+  }
+  .stat-card p {
+    font-size: 2.2rem;
+    font-weight: 700;
+    color: #f1f5f9;
+    margin: 0;
+  }
+  .stat-card .value-change {
+    font-size: 1.2rem;
+    font-weight: 600;
+    margin-top: 5px;
+  }
+  .stat-card .value-change.positive { color: #22c55e; }
+  .stat-card .value-change.negative { color: #ef4444; }
+  .stat-card .value-change.neutral { color: #94a3b8; }
+
+  .chart-area {
+    background: #0f172a;
+    border-radius: 16px;
+    box-shadow: inset 0 0 20px rgba(56,189,248,0.1);
+    padding: 20px;
+    height: 400px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+  canvas {
+    max-height: 100%;
+    max-width: 100%;
+  }
+  #currentDateTime {
+    margin-top: 20px;
+    text-align: center;
+    font-weight: 500;
+    font-size: 1rem;
+    color: #94a3b8;
+    user-select: none;
+  }
+  #debugStatus {
+    margin-top: 20px;
+    text-align: center;
+    font-weight: 600;
+    font-size: 1.1rem;
+    color: yellow; /* Per renderlo ben visibile */
+  }
+</style>
 </head>
 <body>
-    <h1>Ciao! Questa è una pagina di test.</h1>
-    <p>Se vedi questo, GitHub Pages funziona.</p>
+<div class="container">
+  <h1>Investimento ETF Live Dashboard</h1>
+
+  <div class="stats-grid">
+    <div class="stat-card">
+      <h2>Investimento Iniziale</h2>
+      <p>€10.000,00</p>
+    </div>
+    <div class="stat-card">
+      <h2>Valore Attuale</h2>
+      <p id="currentValue">€10.000,00</p>
+    </div>
+    <div class="stat-card">
+      <h2>Variazione Ultimo Secondo</h2>
+      <p id="secondChangePercent" class="value-change neutral">0.0000%</p>
+      <span id="secondChangeAmount" class="value-change neutral">€0.00</span>
+    </div>
+    <div class="stat-card">
+      <h2>Stato Obiettivo</h2>
+      <p id="goalStatus">Monitoraggio</p>
+    </div>
+  </div>
+
+  <div class="chart-area">
+    <canvas id="etfChart"></canvas>
+  </div>
+  <div id="currentDateTime"></div>
+  <div id="debugStatus">Stato: Inizializzazione...</div> </div>
+
+<script>
+  // --- Configurazione Iniziale ---
+  const ctx = document.getElementById('etfChart').getContext('2d');
+  const initialCapital = 10000;
+  const targetValue = 14980;
+  const simulationDays = 120; // Giorni totali per raggiungere l'obiettivo
+
+  // Calcolo del tasso di crescita giornaliero target (composto)
+  const targetDailyRate = Math.pow(targetValue / initialCapital, 1 / simulationDays) - 1;
+
+  // Calcolo del tasso di crescita per secondo, assumendo 86400 secondi in un giorno
+  const secondsInADay = 24 * 60 * 60;
+  const targetPerSecondRate = Math.pow(1 + targetDailyRate, 1 / secondsInADay) - 1;
+
+  // Rumore/volatilità per ogni secondo (simula le "onde") - applicato solo in live
+  const noiseFactor = 0.00005; 
+
+  // --- Variabili di Stato ---
+  let currentValue;
+  let dataPoints;
+  let simulatedDayCounter;
+  let lastRecordedTime; // Timestamp dell'ultima volta che la pagina era attiva
+
+  // --- Funzioni di Utility ---
+  function updateDateTimeDisplay() {
+    const now = new Date();
+    document.getElementById('currentDateTime').textContent = 
+      "Data e ora attuali: " + now.toLocaleString('it-IT', { 
+        day: '2-digit', month: '2-digit', year: 'numeric',
+        hour: '2-digit', minute: '2-digit', second: '2-digit' 
+      });
+  }
+
+  // --- Gestione Persistenza (Caricamento e Salvataggio) ---
+  function loadState() {
+    const savedValue = localStorage.getItem('etfValue');
+    const savedSimulatedDayCounter = localStorage.getItem('simulatedDayCounter');
+    const savedLastRecordedTime = localStorage.getItem('lastRecordedTime');
+    const debugStatusElement = document.getElementById('debugStatus');
+
+    if (savedValue && savedSimulatedDayCounter && savedLastRecordedTime) {
+      currentValue = parseFloat(savedValue);
+      simulatedDayCounter = parseFloat(savedSimulatedDayCounter);
+      lastRecordedTime = parseInt(savedLastRecordedTime); // This is the previous timestamp
+
+      const currentTime = Date.now(); // Current timestamp
+      const timeElapsedMs = currentTime - lastRecordedTime;
+      const timeElapsedSeconds = timeElapsedMs / 1000;
+
+      if (timeElapsedSeconds > 0) {
+        const growthFactorOffline = Math.pow(1 + targetPerSecondRate, timeElapsedSeconds);
+        currentValue *= growthFactorOffline;
+        simulatedDayCounter += timeElapsedSeconds / secondsInADay;
+        debugStatusElement.textContent = `Stato: Recuperato offline. Tempo passato: ${Math.floor(timeElapsedSeconds / 60)} min ${Math.floor(timeElapsedSeconds % 60)} sec.`;
+        debugStatusElement.style.color = '#22c55e'; // Verde per successo
+      } else {
+        debugStatusElement.textContent = `Stato: Caricato senza tempo offline significativo.`;
+        debugStatusElement.style.color = '#94a3b8'; // Grigio/neutro
+      }
+
+      // Assicurati che dataPoints rifletta il nuovo currentValue subito
+      dataPoints = [{ x: new Date(currentTime), y: currentValue }]; 
+
+    } else {
+      // Primo avvio o dati persi
+      currentValue = initialCapital;
+      simulatedDayCounter = 0;
+      dataPoints = [{ x: new Date(), y: currentValue }];
+      lastRecordedTime = Date.now(); // Initialize lastRecordedTime for the first run
+      debugStatusElement.textContent = `Stato: Inizializzato da zero (nessun dato salvato).`;
+      debugStatusElement.style.color = '#ef4444'; // Rosso per reset
+    }
+  }
+
+  function saveState() {
+    localStorage.setItem('etfValue', currentValue.toFixed(6));
+    localStorage.setItem('simulatedDayCounter', simulatedDayCounter.toFixed(6)); // Save with decimals for precision
+    localStorage.setItem('lastRecordedTime', Date.now()); // Salva il timestamp corrente
+  }
+
+  // --- Configurazione e Inizializzazione del Grafico ---
+  let etfChart; // Dichiarazione globale per poterlo aggiornare
+  function initChart() {
+    etfChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        datasets: [{
+          label: 'Valore ETF (€)',
+          data: dataPoints,
+          parsing: {
+            xAxisKey: 'x',
+            yAxisKey: 'y'
+          },
+          borderColor: '#38bdf8',
+          backgroundColor: 'rgba(56,189,248,0.15)',
+          fill: true,
+          tension: 0.4,
+          pointRadius: 0,
+          borderWidth: 3,
+        }]
+      },
+      options: {
+        animation: {
+            duration: 0
+        },
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          x: {
+            type: 'time',
+            time: {
+              unit: 'second',
+              tooltipFormat: 'dd/MM/yyyy HH:mm:ss',
+              displayFormats: {
+                second: 'HH:mm:ss'
+              }
+            },
+            ticks: { 
+              color: '#94a3b8', 
+              maxRotation: 0, 
+              minRotation: 0,
+              autoSkip: true,
+              maxTicksLimit: 10 
+            },
+            title: { display: true, text: 'Tempo Live', color: '#94a3b8' },
+            grid: {
+              color: 'rgba(148, 163, 184, 0.1)'
+            }
+          },
+          y: {
+            ticks: { 
+              color: '#94a3b8', 
+              callback: v => '€' + v.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+            },
+            title: { display: true, text: 'Valore (€)', color: '#94a3b8' },
+            beginAtZero: false,
+            grid: {
+              color: 'rgba(148, 163, 184, 0.1)'
+            }
+          }
+        },
+        plugins: {
+          legend: { 
+            labels: { 
+              color: '#f8fafc', 
+              font: { size: 14, weight: 'bold' } 
+            } 
+          },
+          tooltip: {
+            mode: 'index',
+            intersect: false,
+            callbacks: {
+              label: ctx => `Valore: €${ctx.parsed.y.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, '.')}`,
+              title: function(tooltipItems) {
+                  return tooltipItems[0].label;
+              }
+            },
+            backgroundColor: '#334155',
+            bodyColor: '#f1f5f9',
+            titleColor: '#38bdf8',
+            borderColor: '#38bdf8',
+            borderWidth: 1,
+            padding: 10
+          }
+        },
+        interaction: {
+          mode: 'index',
+          intersect: false
+        }
+      }
+    });
+  }
+
+  // --- Logica di Aggiornamento Dati (Live) ---
+  function updateInvestment() {
+    let lastPoint = dataPoints[dataPoints.length - 1];
+    let newDate = new Date(); // Usa la data/ora attuale per il nuovo punto
+
+    // Calcola il guadagno/perdita del secondo corrente con rumore
+    const fluctuation = (Math.random() * 2 - 1) * noiseFactor;
+    let actualPerSecondRate = targetPerSecondRate + fluctuation;
+    if (actualPerSecondRate < -0.00002) actualPerSecondRate = -0.00002;
+
+    let prevValue = currentValue;
+    currentValue = currentValue * (1 + actualPerSecondRate);
+    if (currentValue < 0.01) currentValue = 0.01; 
+
+    // Aggiungi nuovo punto al grafico
+    dataPoints.push({ x: newDate, y: currentValue });
+
+    // Mantieni circa 5 minuti di dati (300 punti * 1s = 300s) per l'andamento live
+    const maxPoints = 300; 
+    if(dataPoints.length > maxPoints) {
+        dataPoints.shift();
+    }
+
+    // Aggiorna il grafico
+    etfChart.data.datasets[0].data = dataPoints;
+    etfChart.update('none');
+
+    // --- Aggiorna i Valori Visualizzati nella Dashboard ---
+    // Queste funzioni sono state spostate in una funzione separata per essere chiamate anche da onload
+    updateDashboardDisplay(); 
+
+    // --- Aggiorna Contatore Giornaliero Simulato (per l'obiettivo) ---
+    // Incrementa di un secondo reale / secondi_in_un_giorno per ogni secondo di simulazione live
+    simulatedDayCounter += (1 / secondsInADay); 
+
+    // Anche updateGoalStatusDisplay è una nuova funzione
+    updateGoalStatusDisplay();
+
+    saveState(); // Salva lo stato ogni secondo
+  }
+
+  // NUOVA FUNZIONE: Aggiorna solo i valori della dashboard
+  function updateDashboardDisplay() {
+    const prevValue = parseFloat(document.getElementById('currentValue').textContent.replace('€', '').replace(/\./g, '').replace(',', '.')); // Prende il valore *visualizzato* prima
+
+    document.getElementById('currentValue').textContent = '€' + currentValue.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+
+    // Calcola la variazione solo se prevValue è valido (non alla prima esecuzione o reset)
+    // Aggiunto un controllo più robusto per prevValue
+    if (!isNaN(prevValue) && prevValue > 0 && Math.abs(currentValue - prevValue) > 0.0001) { // Aggiunta una soglia minima di cambio
+        const secondChangePercent = ((currentValue - prevValue) / prevValue) * 100;
+        const secondChangeAmount = currentValue - prevValue;
+
+        const percentElement = document.getElementById('secondChangePercent');
+        const amountElement = document.getElementById('secondChangeAmount');
+
+        percentElement.textContent = `${secondChangePercent.toFixed(4)}%`;
+        amountElement.textContent = `${secondChangeAmount >= 0 ? '+' : ''}€${secondChangeAmount.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, '.')}`;
+
+        if (secondChangePercent > 0) {
+            percentElement.className = 'value-change positive';
+            amountElement.className = 'value-change positive';
+        } else if (secondChangePercent < 0) {
+            percentElement.className = 'value-change negative';
+            amountElement.className = 'value-change negative';
+        } else {
+            percentElement.className = 'value-change neutral';
+            amountElement.className = 'value-change neutral';
+        }
+    } else {
+        // Se non abbiamo un prevValue valido (es. al primo caricamento o cambio troppo piccolo), resetta i campi
+        document.getElementById('secondChangePercent').textContent = '0.0000%';
+        document.getElementById('secondChangeAmount').textContent = '€0.00';
+        document.getElementById('secondChangePercent').className = 'value-change neutral';
+        document.getElementById('secondChangeAmount').className = 'value-change neutral';
+    }
+  }
+
+  // NUOVA FUNZIONE: Aggiorna solo lo stato dell'obiettivo
+  function updateGoalStatusDisplay() {
+    if (simulatedDayCounter >= simulationDays && currentValue < targetValue) {
+        document.getElementById('goalStatus').textContent = 'Obiettivo non raggiunto in tempo!';
+        document.getElementById('goalStatus').style.color = '#ef4444';
+        clearInterval(investmentInterval); // Se l'obiettivo non è raggiunto in tempo, ferma la simulazione
+    } else if (currentValue >= targetValue) {
+        document.getElementById('goalStatus').textContent = 'Obiettivo Raggiunto!';
+        document.getElementById('goalStatus').style.color = '#22c55e';
+        clearInterval(investmentInterval); // Se l'obiettivo è raggiunto, ferma la simulazione
+    } else {
+        // Mostra la parte intera del giorno simulato
+        document.getElementById('goalStatus').textContent = `Monitoraggio (Giorno Sim. ${Math.floor(simulatedDayCounter)}/${simulationDays})`;
+        document.getElementById('goalStatus').style.color = '#f8fafc';
+    }
+  }
+
+
+  let investmentInterval;
+
+  // --- Avvio della Simulazione ---
+  window.onload = () => {
+    loadState();   // Carica i dati salvati (e calcola la crescita offline)
+    initChart();   // Inizializza il grafico con i dati aggiornati
+    updateDateTimeDisplay(); // Mostra l'ora attuale
+    setInterval(updateDateTimeDisplay, 1000); // Aggiorna orario ogni secondo
+
+    // Aggiorna subito la dashboard con i valori iniziali/recuperati da loadState
+    updateDashboardDisplay(); 
+    updateGoalStatusDisplay(); // Aggiorna anche lo stato obiettivo subito
+
+    // Avvia il timer di aggiornamento solo se la simulazione non è già terminata
+    // Il clearInterval è ora dentro updateGoalStatusDisplay
+    if (currentValue < targetValue && simulatedDayCounter < simulationDays) {
+        investmentInterval = setInterval(updateInvestment, 1000);
+    }
+  };
+
+  // Assicurati di salvare lo stato anche quando la pagina sta per essere chiusa
+  window.addEventListener('beforeunload', saveState);
+  window.addEventListener('pagehide', saveState); // Per browser mobili e cache
+
+</script>
 </body>
 </html>
