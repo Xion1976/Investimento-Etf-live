@@ -160,40 +160,65 @@
     const savedSimulatedDayCounter = localStorage.getItem('simulatedDayCounter');
     const savedLastRecordedTime = localStorage.getItem('lastRecordedTime');
 
+    console.log("--- DEBUG: Inizio loadState ---");
+    console.log("DEBUG: savedValue (raw):", savedValue);
+    console.log("DEBUG: savedSimulatedDayCounter (raw):", savedSimulatedDayCounter);
+    console.log("DEBUG: savedLastRecordedTime (raw):", savedLastRecordedTime);
+
     if (savedValue && savedSimulatedDayCounter && savedLastRecordedTime) {
       currentValue = parseFloat(savedValue);
-      simulatedDayCounter = parseFloat(savedSimulatedDayCounter); // Parse as float for potential decimal days
-      lastRecordedTime = parseInt(savedLastRecordedTime);
+      simulatedDayCounter = parseFloat(savedSimulatedDayCounter);
+      lastRecordedTime = parseInt(savedLastRecordedTime); // This is the previous timestamp
 
-      const currentTime = Date.now();
+      console.log("DEBUG: Dati salvati trovati.");
+      console.log("DEBUG: currentValue (parsed):", currentValue);
+      console.log("DEBUG: simulatedDayCounter (parsed):", simulatedDayCounter);
+      console.log("DEBUG: lastRecordedTime (parsed from saved):", lastRecordedTime);
+
+      const currentTime = Date.now(); // Current timestamp
       const timeElapsedMs = currentTime - lastRecordedTime;
       const timeElapsedSeconds = timeElapsedMs / 1000;
 
-      // Se è trascorso del tempo offline, calcola la crescita
+      console.log("DEBUG: Current Time (ms):", currentTime);
+      console.log("DEBUG: Time Elapsed (ms):", timeElapsedMs);
+      console.log("DEBUG: Time Elapsed (seconds):", timeElapsedSeconds);
+
       if (timeElapsedSeconds > 0) {
-        // Applica il tasso medio di crescita per il periodo offline
+        console.log("DEBUG: Tempo offline rilevato (>0s). Applico crescita.");
         const growthFactorOffline = Math.pow(1 + targetPerSecondRate, timeElapsedSeconds);
         currentValue *= growthFactorOffline;
-        // Aggiorna anche il contatore dei giorni simulati
         simulatedDayCounter += timeElapsedSeconds / secondsInADay;
+        console.log("DEBUG: Nuovo currentValue (dopo offline):", currentValue);
+        console.log("DEBUG: Nuovo simulatedDayCounter (dopo offline):", simulatedDayCounter);
+      } else {
+        console.log("DEBUG: Nessun tempo offline significativo o tempo trascorso <= 0s.");
       }
       
-      // Resetta i dataPoints per il grafico per mostrare il nuovo valore corrente al momento attuale
       dataPoints = [{ x: new Date(currentTime), y: currentValue }];
 
     } else {
       // Primo avvio o dati persi
+      console.log("DEBUG: Nessun dato salvato trovato. Inizializzo un nuovo stato.");
       currentValue = initialCapital;
       simulatedDayCounter = 0;
       dataPoints = [{ x: new Date(), y: currentValue }];
+      lastRecordedTime = Date.now(); // Initialize lastRecordedTime for the first run
+      console.log("DEBUG: currentValue (inizializzato):", currentValue);
+      console.log("DEBUG: simulatedDayCounter (inizializzato):", simulatedDayCounter);
+      console.log("DEBUG: lastRecordedTime (inizializzato):", lastRecordedTime);
     }
-    lastRecordedTime = Date.now(); // Aggiorna l'ultimo tempo registrato per il prossimo salvataggio/riavvio
+    console.log("--- DEBUG: Fine loadState ---");
   }
 
   function saveState() {
     localStorage.setItem('etfValue', currentValue.toFixed(6));
     localStorage.setItem('simulatedDayCounter', simulatedDayCounter.toFixed(6)); // Save with decimals for precision
     localStorage.setItem('lastRecordedTime', Date.now()); // Salva il timestamp corrente
+    console.log("DEBUG: Dati salvati in localStorage:", {
+        etfValue: currentValue.toFixed(6),
+        simulatedDayCounter: simulatedDayCounter.toFixed(6),
+        lastRecordedTime: Date.now()
+    });
   }
 
   // --- Configurazione e Inizializzazione del Grafico ---
