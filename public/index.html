@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Simulazione ETF iShares Euro Live Dashboard</title>
+<link rel="stylesheet" href="style.css"> <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+</head>
+<body>
+<div class="container">
+  <h1>Andamento live ETF iShares Euro Live Dashboard</h1>
+
+  <div class="stats-grid">
+    <div class="stat-card">
+      <h2>Investimento Iniziale</h2>
+      <p>€10.000,00</p>
+    </div>
+    <div class="stat-card">
+      <h2>Valore Attuale</h2>
+      <p id="currentValue">€10.000,00</p>
+    </div>
+    <div class="stat-card">
+      <h2>Variazione Ultimo Agg.</h2>
+      <p id="secondChangePercent" class="value-change neutral">0.0000%</p>
+      <span id="secondChangeAmount" class="value-change neutral">€0.00</span>
+    </div>
+    <div class="stat-card">
+      <h2>Stato Obiettivo</h2>
+      <p id="goalStatus">Monitoraggio</p>
+    </div>
+  </div>
+
+  <div class="chart-area">
+    <canvas id="etfChart"></canvas>
+  </div>
+  <div id="currentDateTime"></div>
+  <div id="debugStatus">Stato: Connessione al server...</div>
+</div>
+
+<script src="script.js"></script> </body>
+</html>
+

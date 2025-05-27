@@ -1,0 +1,16 @@
+{
+  "name": "simulazione-etf-backend",
+  "version": "1.0.0",
+  "description": "Backend per la simulazione di investimento ETF",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.18.2",
+    "sqlite3": "^5.1.7"
+  }
+}

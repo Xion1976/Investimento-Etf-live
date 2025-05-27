@@ -1,0 +1,91 @@
+/* Stile del CSS precedente */
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap');
+body {
+  margin: 0; padding: 20px; background: #0f172a; color: #f8fafc;
+  font-family: 'Poppins', sans-serif;
+  display: flex; justify-content: center; align-items: center; min-height: 100vh;
+}
+.container {
+  background: #1e293b;
+  border-radius: 20px;
+  box-shadow: 0 0 30px rgba(56,189,248,0.3);
+  max-width: 1000px;
+  width: 100%;
+  padding: 30px;
+  box-sizing: border-box;
+}
+h1 {
+  text-align: center;
+  color: #38bdf8;
+  font-weight: 700;
+  margin-bottom: 25px;
+  font-size: 2.5rem;
+  letter-spacing: 1px;
+}
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 20px;
+  margin-bottom: 30px;
+}
+.stat-card {
+  background: #0f172a;
+  padding: 20px 25px;
+  border-radius: 15px;
+  box-shadow: inset 0 0 15px rgba(56,189,248,0.1);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.stat-card h2 {
+  font-weight: 600;
+  font-size: 1.1rem;
+  color: #94a3b8;
+  margin-bottom: 8px;
+}
+.stat-card p {
+  font-size: 2.2rem;
+  font-weight: 700;
+  color: #f1f5f9;
+  margin: 0;
+}
+.stat-card .value-change {
+  font-size: 1.2rem;
+  font-weight: 600;
+  margin-top: 5px;
+}
+.stat-card .value-change.positive { color: #22c55e; }
+.stat-card .value-change.negative { color: #ef4444; }
+.stat-card .value-change.neutral { color: #94a3b8; }
+
+.chart-area {
+  background: #0f172a;
+  border-radius: 16px;
+  box-shadow: inset 0 0 20px rgba(56,189,248,0.1);
+  padding: 20px;
+  height: 400px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+canvas {
+  max-height: 100%;
+  max-width: 100%;
+}
+#currentDateTime {
+  margin-top: 20px;
+  text-align: center;
+  font-weight: 500;
+  font-size: 1rem;
+  color: #94a3b8;
+  user-select: none;
+}
+#debugStatus {
+  margin-top: 20px;
+  text-align: center;
+  font-weight: 600;
+  font-size: 1.1rem;
+  color: yellow;
+}
+
