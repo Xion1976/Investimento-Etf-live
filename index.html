@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Simulazione ETF iShares Euro Live Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap');
+  body {
+    margin: 0; padding: 20px; background: #0f172a; color: #f8fafc;
+    font-family: 'Poppins', sans-serif;
+    display: flex; justify-content: center; align-items: center; min-height: 100vh;
+  }
+  .container {
+    background: #1e293b;
+    border-radius: 20px;
+    box-shadow: 0 0 30px rgba(56,189,248,0.3);
+    max-width: 1000px;
+    width: 100%;
+    padding: 30px;
+    box-sizing: border-box;
+  }
+  h1 {
+    text-align: center;
+    color: #38bdf8;
+    font-weight: 700;
+    margin-bottom: 25px;
+    font-size: 2.5rem;
+    letter-spacing: 1px;
+  }
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 20px;
+    margin-bottom: 30px;
+  }
+  .stat-card {
+    background: #0f172a;
+    padding: 20px 25px;
+    border-radius: 15px;
+    box-shadow: inset 0 0 15px rgba(56,189,248,0.1);
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+  .stat-card h2 {
+    font-weight: 600;
+    font-size: 1.1rem;
+    color: #94a3b8;
+    margin-bottom: 8px;
+  }
+  .stat-card p {
+    font-size: 2.2rem;
+    font-weight: 700;
+    color: #f1f5f9;
+    margin: 0;
+  }
+  .stat-card .value-change {
+    font-size: 1.2rem;
+    font-weight: 600;
+    margin-top: 5px;
+  }
+  .stat-card .value-change.positive { color: #22c55e; }
+  .stat-card .value-change.negative { color: #ef4444; }
+  .stat-card .value-change.neutral { color: #94a3b8; }
+
+  .chart-area {
+    background: #0f172a;
+    border-radius: 16px;
+    box-shadow: inset 0 0 20px rgba(56,189,248,0.1);
+    padding: 20px;
+    height: 400px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+  canvas {
+    max-height: 100%;
+    max-width: 100%;
+  }
+  #currentDateTime {
+    margin-top: 20px;
+    text-align: center;
+    font-weight: 500;
+    font-size: 1rem;
+    color: #94a3b8;
+    user-select: none;
+  }
+  #debugStatus {
+    margin-top: 20px;
+    text-align: center;
+    font-weight: 600;
+    font-size: 1.1rem;
+    color: yellow; /* Per renderlo ben visibile */
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Simulazione ETF iShares Euro Live Dashboard</h1>
+  
+  <div class="stats-grid">
+    <div class="stat-card">
+      <h2>Investimento Iniziale</h2>
+      <p>€10.000,00</p>
+    </div>
+    <div class="stat-card">
+      <h2>Valore Attuale</h2>
+      <p id="currentValue">€10.000,00</p>
+    </div>
+    <div class="stat-card">
+      <h2>Variazione Ultimo Agg.</h2>
+      <p id="secondChangePercent" class="value-change neutral">0.0000%</p>
+      <span id="secondChangeAmount" class="value-change neutral">€0.00</span>
+    </div>
+    <div class="stat-card">
+      <h2>Stato Obiettivo</h2>
+      <p id="goalStatus">Monitoraggio</p>
+    </div>
+  </div>
+
+  <div class="chart-area">
+    <canvas id="etfChart"></canvas>
+  </div>
+  <div id="currentDateTime"></div>
+  <div id="debugStatus">Stato: Inizializzazione...</div>
+</div>
+
+<script>
+  // --- Configurazione Iniziale ---
+  const ctx = document.getElementById('etfChart').getContext('2d');
+  const initialCapital = 10000;
+  const targetValue = 15000;
+  const simulationMonths = 5;
+  const simulationDays = simulationMonths * (365.25 / 12); // Giorni medi in 5 mesi (es. 152.1875)
+
+  // Aggiornamento ogni 60 secondi (invece di 1 secondo)
+  const UPDATE_INTERVAL_MS = 60000; 
+  const secondsInADay = 24 * 60 * 60;
+  const secondsPerUpdate = UPDATE_INTERVAL_MS / 1000;
+
+  // Calcolo del tasso di crescita giornaliero target (composto)
+  const targetDailyRate = Math.pow(targetValue / initialCapital, 1 / simulationDays) - 1;
+  // Calcolo del tasso di crescita per secondo, per il calcolo offline e per l'aggiornamento live
+  const targetPerSecondRate = Math.pow(1 + targetDailyRate, 1 / secondsInADay) - 1;
+  
+  // Rumore/volatilità per ogni SECONDO simulato (anche se aggiorniamo ogni 60s)
+  // Questo noiseFactor è calibrato per far oscillare il guadagno giornaliero
+  // tra circa 32 e 37 euro, tenendo conto del tasso target.
+  const noiseFactor = 0.000005; // Un valore più piccolo per rumore al secondo
+
+  // --- Variabili di Stato ---
+  let currentValue;
+  let dataPoints;
+  let simulatedDayCounter;
+  let lastRecordedTime; // Timestamp dell'ultima volta che la pagina era attiva
+  let prevValueForDisplay = initialCapital; // Per calcolare la variazione percentuale
+
+
+  // --- Funzioni di Utility ---
+  function updateDateTimeDisplay() {
+    const now = new Date();
+    document.getElementById('currentDateTime').textContent = 
+      "Data e ora attuali: " + now.toLocaleString('it-IT', { 
+        day: '2-digit', month: '2-digit', year: 'numeric',
+        hour: '2-digit', minute: '2-digit', second: '2-digit' 
+      });
+  }
+
+  // --- Gestione Persistenza (Caricamento e Salvataggio) ---
+  function loadState() {
+    const savedValue = localStorage.getItem('etfValue');
+    const savedSimulatedDayCounter = localStorage.getItem('simulatedDayCounter');
+    const savedLastRecordedTime = localStorage.getItem('lastRecordedTime');
+    const debugStatusElement = document.getElementById('debugStatus');
+
+    if (savedValue && savedSimulatedDayCounter && savedLastRecordedTime) {
+      currentValue = parseFloat(savedValue);
+      simulatedDayCounter = parseFloat(savedSimulatedDayCounter);
+      lastRecordedTime = parseInt(savedLastRecordedTime); 
+
+      // Assicurati che prevValueForDisplay sia il valore salvato prima di applicare la crescita offline
+      prevValueForDisplay = currentValue; 
+
+      const currentTime = Date.now(); 
+      const timeElapsedMs = currentTime - lastRecordedTime;
+      const timeElapsedSeconds = timeElapsedMs / 1000;
+
+      if (timeElapsedSeconds > 0) {
+        // Calcola la crescita composta per ogni secondo trascorso offline
+        const growthFactorOffline = Math.pow(1 + targetPerSecondRate, timeElapsedSeconds);
+        // Applica anche una piccola quantità di rumore proporzionale al tempo offline
+        const offlineNoise = (Math.random() * 2 - 1) * noiseFactor * timeElapsedSeconds / secondsPerUpdate;
+        
+        currentValue *= (growthFactorOffline + offlineNoise); // Applica crescita e un po' di rumore offline
+        
+        // Assicurati che il valore non diventi negativo in caso di forte rumore negativo
+        if (currentValue < 0.01) currentValue = 0.01;
+
+        simulatedDayCounter += timeElapsedSeconds / secondsInADay;
+        debugStatusElement.textContent = `Stato: Recuperato offline. Tempo passato: ${Math.floor(timeElapsedSeconds / 60)} min ${Math.floor(timeElapsedSeconds % 60)} sec.`;
+        debugStatusElement.style.color = '#22c55e'; 
+      } else {
+        debugStatusElement.textContent = `Stato: Caricato senza tempo offline significativo.`;
+        debugStatusElement.style.color = '#94a3b8'; 
+      }
+      
+      // Aggiungi un punto iniziale per il grafico che rifletta il valore recuperato/calcolato
+      dataPoints = [{ x: new Date(currentTime), y: currentValue }];
+
+    } else {
+      // Primo avvio o dati persi
+      currentValue = initialCapital;
+      simulatedDayCounter = 0;
+      dataPoints = [{ x: new Date(), y: currentValue }];
+      lastRecordedTime = Date.now(); 
+      prevValueForDisplay = initialCapital; // Reset anche per il display
+      debugStatusElement.textContent = `Stato: Inizializzato da zero (nessun dato salvato).`;
+      debugStatusElement.style.color = '#ef4444'; 
+    }
+  }
+
+  function saveState() {
+    localStorage.setItem('etfValue', currentValue.toFixed(6));
+    localStorage.setItem('simulatedDayCounter', simulatedDayCounter.toFixed(6));
+    localStorage.setItem('lastRecordedTime', Date.now()); 
+  }
+
+  // --- Configurazione e Inizializzazione del Grafico ---
+  let etfChart; 
+  function initChart() {
+    etfChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        datasets: [{
+          label: 'Valore ETF (€)',
+          data: dataPoints,
+          parsing: {
+            xAxisKey: 'x',
+            yAxisKey: 'y'
+          },
+          borderColor: '#38bdf8',
+          backgroundColor: 'rgba(56,189,248,0.15)',
+          fill: true,
+          tension: 0.4,
+          pointRadius: 0,
+          borderWidth: 3,
+        }]
+      },
+      options: {
+        animation: {
+            duration: UPDATE_INTERVAL_MS / 4 // Animazione più breve per la transizione
+        },
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          x: {
+            type: 'time',
+            time: {
+              unit: 'minute', // Mostra unità per minuto dato l'aggiornamento ogni 60s
+              tooltipFormat: 'dd/MM/yyyy HH:mm:ss',
+              displayFormats: {
+                minute: 'HH:mm',
+                hour: 'HH:mm'
+              }
+            },
+            ticks: { 
+              color: '#94a3b8', 
+              maxRotation: 0, 
+              minRotation: 0,
+              autoSkip: true,
+              maxTicksLimit: 10 
+            },
+            title: { display: true, text: 'Tempo Live', color: '#94a3b8' },
+            grid: {
+              color: 'rgba(148, 163, 184, 0.1)'
+            }
+          },
+          y: {
+            ticks: { 
+              color: '#94a3b8', 
+              callback: v => '€' + v.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+            },
+            title: { display: true, text: 'Valore (€)', color: '#94a3b8' },
+            beginAtZero: false,
+            grid: {
+              color: 'rgba(148, 163, 184, 0.1)'
+            }
+          }
+        },
+        plugins: {
+          legend: { 
+            labels: { 
+              color: '#f8fafc', 
+              font: { size: 14, weight: 'bold' } 
+            } 
+          },
+          tooltip: {
+            mode: 'index',
+            intersect: false,
+            callbacks: {
+              label: ctx => `Valore: €${ctx.parsed.y.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, '.')}`,
+              title: function(tooltipItems) {
+                  return tooltipItems[0].label;
+              }
+            },
+            backgroundColor: '#334155',
+            bodyColor: '#f1f5f9',
+            titleColor: '#38bdf8',
+            borderColor: '#38bdf8',
+            borderWidth: 1,
+            padding: 10
+          }
+        },
+        interaction: {
+          mode: 'index',
+          intersect: false
+        }
+      }
+    });
+  }
+
+  // --- Logica di Aggiornamento Dati (Live) ---
+  function updateInvestment() {
+    // Calcola il guadagno/perdita per l'intervallo di aggiornamento (60 secondi)
+    // Tasso base per 60 secondi
+    const baseRateForInterval = Math.pow(1 + targetPerSecondRate, secondsPerUpdate) - 1;
+    
+    // Aggiungi un rumore cumulativo per i 60 secondi
+    // Il noiseFactor è per secondo, quindi lo moltiplichiamo per i secondi dell'intervallo
+    const cumulativeNoise = (Math.random() * 2 - 1) * noiseFactor * secondsPerUpdate;
+    
+    let actualRateForInterval = baseRateForInterval + cumulativeNoise;
+    
+    // Prevenire cali eccessivi
+    if (actualRateForInterval < -0.0005) actualRateForInterval = -0.0005; // Limita la perdita massima per 60 secondi
+
+    // Salva il valore attuale prima dell'aggiornamento per il calcolo della variazione
+    prevValueForDisplay = currentValue; 
+    
+    currentValue = currentValue * (1 + actualRateForInterval);
+    if (currentValue < 0.01) currentValue = 0.01; 
+
+    let newDate = new Date(); 
+    dataPoints.push({ x: newDate, y: currentValue });
+
+    // Mantieni circa 1 ora di dati (60 punti * 60s = 3600s) per l'andamento live
+    const maxPoints = 60; // 60 punti * 60s = 3600 secondi = 1 ora
+    if(dataPoints.length > maxPoints) {
+        dataPoints.shift();
+    }
+
+    etfChart.data.datasets[0].data = dataPoints;
+    etfChart.update('none');
+
+    updateDashboardDisplay(); 
+    simulatedDayCounter += (secondsPerUpdate / secondsInADay); 
+    updateGoalStatusDisplay();
+
+    saveState(); // Salva lo stato ogni 60 secondi
+  }
+
+  // Aggiorna solo i valori della dashboard
+  function updateDashboardDisplay() {
+    document.getElementById('currentValue').textContent = '€' + currentValue.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+
+    // Calcola la variazione solo se prevValueForDisplay è valido e diverso da currentValue
+    if (!isNaN(prevValueForDisplay) && prevValueForDisplay > 0 && currentValue !== prevValueForDisplay) {
+        const changePercent = ((currentValue - prevValueForDisplay) / prevValueForDisplay) * 100;
+        const changeAmount = currentValue - prevValueForDisplay;
+
+        const percentElement = document.getElementById('secondChangePercent');
+        const amountElement = document.getElementById('secondChangeAmount');
+
+        percentElement.textContent = `${changePercent.toFixed(4)}%`;
+        amountElement.textContent = `${changeAmount >= 0 ? '+' : ''}€${changeAmount.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, '.')}`;
+
+        if (changePercent > 0) {
+            percentElement.className = 'value-change positive';
+            amountElement.className = 'value-change positive';
+        } else if (changePercent < 0) {
+            percentElement.className = 'value-change negative';
+            amountElement.className = 'value-change negative';
+        } else {
+            percentElement.className = 'value-change neutral';
+            amountElement.className = 'value-change neutral';
+        }
+    } else {
+        document.getElementById('secondChangePercent').textContent = '0.0000%';
+        document.getElementById('secondChangeAmount').textContent = '€0.00';
+        document.getElementById('secondChangePercent').className = 'value-change neutral';
+        document.getElementById('secondChangeAmount').className = 'value-change neutral';
+    }
+  }
+
+  // Aggiorna solo lo stato dell'obiettivo
+  function updateGoalStatusDisplay() {
+    if (currentValue >= targetValue) {
+        document.getElementById('goalStatus').textContent = 'Obiettivo Raggiunto!';
+        document.getElementById('goalStatus').style.color = '#22c55e';
+        clearInterval(investmentInterval); // Ferma la simulazione se l'obiettivo è raggiunto
+    } else if (simulatedDayCounter >= simulationDays) {
+        document.getElementById('goalStatus').textContent = 'Obiettivo non raggiunto in tempo!';
+        document.getElementById('goalStatus').style.color = '#ef4444';
+        clearInterval(investmentInterval); // Ferma la simulazione se il tempo è scaduto
+    } else {
+        // Mostra la parte intera del giorno simulato
+        document.getElementById('goalStatus').textContent = `Monitoraggio (Giorno Sim. ${Math.floor(simulatedDayCounter)}/${Math.floor(simulationDays)})`;
+        document.getElementById('goalStatus').style.color = '#f8fafc';
+    }
+  }
+
+  let investmentInterval;
+
+  // --- Avvio della Simulazione ---
+  window.onload = () => {
+    loadState();   // Carica i dati salvati (e calcola la crescita offline)
+    initChart();   // Inizializza il grafico con i dati aggiornati
+    updateDateTimeDisplay(); 
+    setInterval(updateDateTimeDisplay, 1000); 
+
+    // Aggiorna subito la dashboard con i valori iniziali/recuperati da loadState
+    updateDashboardDisplay(); 
+    updateGoalStatusDisplay(); 
+    
+    // Avvia il timer di aggiornamento solo se la simulazione non è già terminata
+    if (currentValue < targetValue && simulatedDayCounter < simulationDays) {
+        investmentInterval = setInterval(updateInvestment, UPDATE_INTERVAL_MS);
+    }
+  };
+
+  // Assicurati di salvare lo stato anche quando la pagina sta per essere chiusa
+  window.addEventListener('beforeunload', saveState);
+  window.addEventListener('pagehide', saveState); 
+
+</script>
+</body>
+</html>
